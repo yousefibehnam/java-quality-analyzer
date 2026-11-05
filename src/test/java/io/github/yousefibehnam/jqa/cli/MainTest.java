@@ -37,6 +37,24 @@ class MainTest {
     }
 
     @Test
+    void statsFileRecordsResolutionCounts() throws IOException {
+        Path out = dir.resolve("m.csv");
+        Path stats = dir.resolve("m.properties");
+        int code = Main.run("analyze", Fixtures.path("response").toString(), "-o", out.toString(),
+                "--stats", stats.toString());
+
+        assertThat(code).isZero();
+        java.util.Properties p = new java.util.Properties();
+        try (var in = Files.newBufferedReader(stats)) {
+            p.load(in);
+        }
+        // Account: field initializer 1, this(0) 1, deposit 2, withdraw 3, check 1, describe 2 = 10
+        // call sites, all resolvable; Ledger makes none.
+        assertThat(p).containsEntry("types", "2").containsEntry("call_sites", "10")
+                .containsEntry("resolved_call_sites", "10");
+    }
+
+    @Test
     void parseErrorsFailOnlyWhenRequested() throws IOException {
         Files.writeString(dir.resolve("Bad.java"), "class Bad {");
         Path out = dir.resolve("m.csv");

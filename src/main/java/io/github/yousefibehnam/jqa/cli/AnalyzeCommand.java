@@ -3,6 +3,7 @@ package io.github.yousefibehnam.jqa.cli;
 import io.github.yousefibehnam.jqa.build.ModelBuilder;
 import io.github.yousefibehnam.jqa.metrics.ClassMetrics;
 import io.github.yousefibehnam.jqa.metrics.MetricsCalculator;
+import io.github.yousefibehnam.jqa.metrics.ResolutionStats;
 import io.github.yousefibehnam.jqa.model.ProjectModel;
 import io.github.yousefibehnam.jqa.parser.SourceScanner;
 import io.github.yousefibehnam.jqa.parser.SourceScanner.ParseProblem;
@@ -21,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.Callable;
 
 /** {@code jqa analyze <path>}: computes metrics for every type under a source directory. */
@@ -43,6 +45,10 @@ final class AnalyzeCommand implements Callable<Integer> {
 
     @Option(names = "--include-jdk", description = "Count couplings to JDK types (java.*, javax.*, ...) in CBO.")
     boolean includeJdk;
+
+    @Option(names = "--stats", paramLabel = "FILE",
+            description = "Also write name-resolution statistics (a .properties file) to FILE.")
+    Path statsFile;
 
     @Option(names = "--fail-on-parse-error", description = "Exit with status 2 if any file cannot be parsed.")
     boolean failOnParseError;
@@ -69,8 +75,16 @@ final class AnalyzeCommand implements Callable<Integer> {
                 writer.write(rows, out);
             }
         }
-        System.err.printf("analysed %d files, %d types (%d files skipped)%n",
-                scan.files().size(), rows.size(), scan.problems().size());
+        ResolutionStats stats = ResolutionStats.of(model, scan.files().size(), scan.problems().size());
+        if (statsFile != null) {
+            try (Writer out = Files.newBufferedWriter(statsFile, StandardCharsets.UTF_8)) {
+                stats.toProperties().store(out, "jqa name-resolution statistics");
+            }
+        }
+        System.err.printf(Locale.ROOT, "analysed %d files, %d types (%d files skipped); "
+                        + "call sites resolved: %.1f%%, type references resolved: %.1f%%%n",
+                stats.files(), stats.types(), stats.skippedFiles(),
+                100 * stats.callResolutionRate(), 100 * stats.typeResolutionRate());
         return failOnParseError && !scan.problems().isEmpty() ? 2 : 0;
     }
 
