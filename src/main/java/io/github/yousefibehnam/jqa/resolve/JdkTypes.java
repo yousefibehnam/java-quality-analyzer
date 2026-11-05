@@ -79,13 +79,15 @@ public final class JdkTypes {
      * Return type of a public JDK method with this name and arity, when all such
      * overloads agree on it (e.g. every {@code StringBuilder.append(x)} returns
      * {@code StringBuilder}). Generic return types (type variables) give no answer.
+     * Compiler-generated bridge methods are ignored.
      */
     public static Optional<String> returnType(String owner, String methodName, int argCount) {
         return load(owner).flatMap(type -> {
             try {
                 String answer = null;
                 for (java.lang.reflect.Method method : type.getMethods()) {
-                    if (!method.getName().equals(methodName) || method.getParameterCount() != argCount) {
+                    if (method.isBridge() || !method.getName().equals(methodName)
+                            || method.getParameterCount() != argCount) {
                         continue;
                     }
                     if (!(method.getGenericReturnType() instanceof Class<?>)
@@ -116,6 +118,9 @@ public final class JdkTypes {
      * depth 1. An interface with no super-interfaces has depth 1 (it is rooted at
      * {@code Object} like every reference type); otherwise its depth is one more
      * than its deepest super-interface.
+     *
+     * <p>The answer comes from the running JDK, so it can differ between JDK versions:
+     * since JDK 21, {@code List} extends {@code SequencedCollection} and is one level deeper.
      */
     public static int depth(Class<?> type) {
         if (type == Object.class) {
