@@ -7,10 +7,6 @@ and Henderson-Sellers' LCOM* for every class in a Java source tree, and writes t
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Tests](https://github.com/yousefibehnam/java-quality-analyzer/actions/workflows/ci.yml/badge.svg)](https://github.com/yousefibehnam/java-quality-analyzer/actions/workflows/ci.yml)
 
-## Background
-
-Originally developed in 2017–2018 during my M.Sc.
-This repository is a clean re-implementation written in 2026.
 
 ## Features
 
