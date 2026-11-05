@@ -20,7 +20,7 @@ This repository is a clean re-implementation written in 2026.
   resolved through imports, packages and nesting. JDK types are checked against the running JDK by
   reflection, which gives exact DIT values for classes that extend JDK classes.
 - **Call-receiver typing** for RFC and CBO. It follows locals, fields, inherited methods, static imports
-  and call chains. It resolved 95–98% of call sites in the case studies, and the tool reports this rate
+  and call chains. It resolved 97.7–98.2% of call sites in the case studies, and the tool reports this rate
   for every run.
 - **Honest output.** DIT is flagged as a lower bound when a supertype is unknown. LCOM* is left empty when
   it is undefined. Files that fail to parse are reported and skipped, so one bad file doesn't stop the run.
@@ -58,19 +58,24 @@ flowchart LR
 
 ## Dataset
 
-There is no dataset in the usual sense. The case studies analyse the production sources of
-three widely used open-source Java projects at pinned release tags. Their source code is
-**not** included in this repository. [`scripts/run_case_studies.sh`](scripts/run_case_studies.sh)
-clones each one into `data/` (git-ignored) and checks that it is at the expected tag.
+There is no dataset in the usual sense. The case studies analyse the production source code of
+three widely used open-source Java projects, using the releases that were current when the
+original work was done. The source code is **not** included in this repository.
+[`scripts/run_case_studies.sh`](scripts/run_case_studies.sh) downloads each official
+`-sources.jar` from Maven Central into `data/` (git-ignored) and checks its SHA-1 against the
+checksum that Maven Central publishes.
 
-| Project | Tag | License | Analysed directory |
-|---|---|---|---|
-| [Apache Commons Lang](https://github.com/apache/commons-lang) | `rel/commons-lang-3.21.0` | Apache-2.0 | `src/main/java` |
-| [Apache Commons IO](https://github.com/apache/commons-io) | `rel/commons-io-2.22.0` | Apache-2.0 | `src/main/java` |
-| [JUnit 4](https://github.com/junit-team/junit4) | `r4.13.2` | EPL-1.0 | `src/main/java` |
+Dataset chosen to match the period of the original project (2017–2018).
 
-The `results/` directory contains only metric values (numbers per class name) derived from
-these projects.
+| Project | Release | Released | License | Source |
+|---|---|---|---|---|
+| [Apache Commons Lang](https://commons.apache.org/proper/commons-lang/) | 3.7 | 2017-11-04 | Apache-2.0 | `org.apache.commons:commons-lang3:3.7:sources` |
+| [Apache Commons IO](https://commons.apache.org/proper/commons-io/) | 2.6 | 2017-10-15 | Apache-2.0 | `commons-io:commons-io:2.6:sources` |
+| [JUnit 4](https://junit.org/junit4/) | 4.12 | 2014-12-04 | EPL-1.0 | `junit:junit:4.12:sources` |
+
+JUnit 4.12 was the latest JUnit 4 release throughout 2017–2018; 4.13 came out in 2020. The
+`results/` directory contains only metric values (numbers per class name) derived from these
+releases.
 
 ## Installation and usage
 
@@ -90,8 +95,8 @@ java -jar target/jqa.jar summarize -o summary.md app=metrics.csv
 
 Output columns: `class, kind, file, methods, fields, wmc, dit, dit_exact, noc, cbo, rfc, lcom, lcom_star`.
 
-To reproduce the case studies (clone the three projects, analyse them, summarise), run this. It
-takes about 4 s plus clone time:
+To reproduce the case studies (download the three releases, analyse them, summarise), run this.
+It takes a few seconds plus download time (about 1 MB):
 
 ```bash
 scripts/run_case_studies.sh
@@ -108,56 +113,54 @@ types are excluded.
 
 | Project | Source files | Types | Classes, enums, records | Parse failures | Call sites resolved | Type references resolved |
 |---|---:|---:|---:|---:|---:|---:|
-| Commons Lang 3.21.0 | 246 | 377 | 291 | 0 | 97.6% | 98.8% |
-| Commons IO 2.22.0 | 261 | 365 | 328 | 0 | 95.3% | 99.0% |
-| JUnit 4.13.2 | 207 | 274 | 224 | 0 | 98.3% | 99.8% |
+| Commons Lang 3.7 | 138 | 222 | 204 | 0 | 97.7% | 99.9% |
+| Commons IO 2.6 | 118 | 125 | 120 | 0 | 97.8% | 99.9% |
+| JUnit 4.12 | 183 | 229 | 188 | 0 | 98.2% | 99.8% |
 
 **Median (P90) per class**
 
-| Metric | Commons Lang | Commons IO | JUnit 4 |
+| Metric | Commons Lang 3.7 | Commons IO 2.6 | JUnit 4.12 |
 |---|---:|---:|---:|
-| WMC | 8 (70) | 7 (30.3) | 5 (26) |
-| DIT | 1 (3) | 2 (4) | 1 (3) |
-| NOC | 0 (0) | 0 (1) | 0 (1) |
-| CBO | 3 (10) | 3 (7) | 5 (13.7) |
-| RFC | 12 (66) | 10.5 (38.6) | 8 (39.4) |
-| LCOM | 3 (276) | 1 (58.3) | 1 (63.6) |
-| LCOM* | 0.94 (1.03) | 0.87 (1.50) | 0.88 (1.00) |
+| WMC | 9 (78.8) | 10 (33.2) | 5.5 (25.3) |
+| DIT | 1 (2) | 2 (4) | 2 (3) |
+| NOC | 0 (0) | 0 (0) | 0 (1) |
+| CBO | 2 (7.7) | 2 (5) | 5 (13.6) |
+| RFC | 12 (67.7) | 10 (38.1) | 10 (40) |
+| LCOM | 1 (277.5) | 0 (68.9) | 1 (67.8) |
+| LCOM* | 0.92 (1.03) | 0.78 (1.62) | 0.87 (1.03) |
 
 **Largest classes by WMC**
 
 | Project | Class | WMC | RFC | CBO |
 |---|---|---:|---:|---:|
-| Commons Lang | `ArrayUtils` | 1083 | 488 | 42 |
-| Commons Lang | `StringUtils` | 903 | 386 | 43 |
-| Commons IO | `IOUtils` | 316 | 284 | 74 |
-| Commons IO | `FileUtils` | 283 | 334 | 33 |
-| JUnit 4 | `org.junit.Assert` | 106 | 98 | 14 |
-| JUnit 4 | `ParentRunner` | 66 | 101 | 38 |
+| Commons Lang | `ArrayUtils` | 1057 | 405 | 24 |
+| Commons Lang | `StringUtils` | 977 | 327 | 29 |
+| Commons IO | `FileUtils` | 334 | 232 | 21 |
+| Commons IO | `IOUtils` | 245 | 198 | 7 |
+| JUnit 4 | `org.junit.Assert` | 96 | 85 | 12 |
+| JUnit 4 | `junit.framework.Assert` | 61 | 57 | 5 |
 
-**Spearman rank correlation, all 843 classes pooled (selected pairs)**
+**Spearman rank correlation, all 512 classes pooled (selected pairs)**
 
 | Pair | ρ |
 |---|---:|
 | WMC – RFC | 0.94 |
-| WMC – LCOM | 0.71 |
-| WMC – CBO | 0.41 |
-| WMC – LCOM* | −0.01 |
-| DIT – WMC | −0.24 |
+| WMC – LCOM | 0.69 |
+| WMC – CBO | 0.27 |
+| WMC – LCOM* | 0.04 |
+| DIT – WMC | −0.22 |
 
 **Observations**
 
-- All size-related metrics are strongly right-skewed. Commons Lang's mean WMC is 32.1, but its
-  median is 8. The extreme values belong to static utility classes (`ArrayUtils`, `StringUtils`,
-  `IOUtils`, `FileUtils`), which hold hundreds of overloads.
+- All size-related metrics are strongly right-skewed. Commons Lang's mean WMC is 38.7, but its
+  median is 9. The extreme values belong to static utility classes (`ArrayUtils`, `StringUtils`,
+  `FileUtils`, `IOUtils`), which hold hundreds of overloads.
 - WMC and RFC almost rank classes the same way (ρ = 0.94), so in these projects they carry largely
   overlapping information.
-- LCOM grows with class size (ρ = 0.71 with WMC), but the normalised LCOM* does not (ρ = −0.01).
+- LCOM grows with class size (ρ = 0.69 with WMC), but the normalised LCOM* does not (ρ = 0.04).
   That makes LCOM* the more useful of the two for comparing classes of different sizes.
-- Commons IO has deeper inheritance (median DIT 2) than the other two projects (median 1). About
-  half of its classes that use `extends` (76 of 150, by a text search) extend stream, reader or
-  writer types from `java.io` or Commons IO's own proxies of them, and those JDK supertypes count
-  toward DIT.
+- JUnit 4.12 is the most coupled of the three (median CBO 5, against 2 for the Commons
+  libraries), even though its classes are smaller (median WMC 5.5).
 
 ## Project structure
 
@@ -165,7 +168,7 @@ types are excluded.
 java-quality-analyzer/
 ├── pom.xml                       Maven build (Java 17 bytecode, shaded jqa.jar)
 ├── docs/metrics.md               exact metric definitions and modelling choices
-├── scripts/run_case_studies.sh   clones the case-study projects and regenerates results/
+├── scripts/run_case_studies.sh   downloads the case-study releases and regenerates results/
 ├── results/                      per-class CSVs, resolution stats, summary.md
 └── src/
     ├── main/java/io/github/yousefibehnam/jqa/

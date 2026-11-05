@@ -41,7 +41,7 @@ from:
 The method is then looked up along the project's supertype chain, so a call to an
 inherited method is attributed to the class that declares it. Statically imported
 methods are attributed to the type they are imported from. On the three case-study
-projects, 95.3–98.3% of call sites were resolved; see [`results/summary.md`](../results/summary.md).
+projects, 97.7–98.2% of call sites were resolved; see [`results/summary.md`](../results/summary.md).
 
 Local scopes are flattened. A parameter or local variable declared *anywhere* in a
 method hides a field with the same name for the *whole* method.
