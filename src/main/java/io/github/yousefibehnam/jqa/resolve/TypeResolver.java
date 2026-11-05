@@ -34,6 +34,8 @@ public final class TypeResolver {
     private final String packageName;
     private final Map<String, String> singleImports = new HashMap<>();
     private final List<String> onDemandImports = new ArrayList<>();
+    private final Map<String, String> staticMemberImports = new HashMap<>();
+    private final List<String> staticOnDemandImports = new ArrayList<>();
 
     /**
      * @param projectTypes qualified names of every type in the analysed sources
@@ -44,16 +46,32 @@ public final class TypeResolver {
         this.projectTypes = projectTypes;
         this.packageName = packageName;
         for (ImportDeclaration imp : imports) {
+            String name = imp.getNameAsString();
             if (imp.isStatic()) {
+                if (imp.isAsterisk()) {
+                    staticOnDemandImports.add(name);
+                } else {
+                    int dot = name.lastIndexOf('.');
+                    staticMemberImports.put(name.substring(dot + 1), name.substring(0, dot));
+                }
                 continue;
             }
-            String name = imp.getNameAsString();
             if (imp.isAsterisk()) {
                 onDemandImports.add(name);
             } else {
                 singleImports.put(simpleNameOf(name), name);
             }
         }
+    }
+
+    /** The type named by {@code import static T.member;}, if any. */
+    public String staticImportOwner(String member) {
+        return staticMemberImports.get(member);
+    }
+
+    /** Types named by {@code import static T.*;}, in source order. */
+    public List<String> staticOnDemandOwners() {
+        return List.copyOf(staticOnDemandImports);
     }
 
     public static boolean isUnresolved(String name) {

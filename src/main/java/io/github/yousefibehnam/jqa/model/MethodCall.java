@@ -7,7 +7,8 @@ package io.github.yousefibehnam.jqa.model;
  * not compared because argument types are often not resolvable without a full
  * compiler; overloads with the same arity are therefore treated as one method.
  *
- * @param owner    fully qualified name of the receiver type, or {@link #UNKNOWN_OWNER}
+ * @param owner    fully qualified name of the declaring type; {@link #UNKNOWN_OWNER} when the
+ *                 receiver could not be typed, or {@code ?Name} for an unresolvable type name
  * @param name     method name, or {@link #CONSTRUCTOR} for constructor invocations
  * @param argCount number of arguments at the call site
  */
@@ -17,7 +18,7 @@ public record MethodCall(String owner, String name, int argCount) {
     public static final String CONSTRUCTOR = "<init>";
 
     public boolean isResolved() {
-        return !UNKNOWN_OWNER.equals(owner);
+        return !owner.startsWith(UNKNOWN_OWNER);
     }
 
     /** A stable key such as {@code com.acme.Order#total/0}. */

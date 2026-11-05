@@ -1,13 +1,16 @@
 package io.github.yousefibehnam.jqa.build;
 
 import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.AnnotationDeclaration;
 import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.CompactConstructorDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
+import com.github.javaparser.ast.body.EnumConstantDeclaration;
 import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
+import com.github.javaparser.ast.body.InitializerDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.RecordDeclaration;
@@ -32,13 +35,25 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Builds a {@link ProjectModel} from parsed compilation units in two passes:
- * the first pass collects the qualified names of all declared types so that the
- * second pass can resolve references between them.
+ * Builds a {@link ProjectModel} from parsed compilation units in three passes:
+ * <ol>
+ *   <li>collect the qualified names of all declared types;</li>
+ *   <li>build each type's supertypes, fields, method signatures, field accesses and
+ *       type references (names can now be resolved against the whole project);</li>
+ *   <li>collect method calls, which needs the signatures and return types of all
+ *       project methods to follow inherited methods and call chains.</li>
+ * </ol>
  */
 public final class ModelBuilder {
 
+    /** A body whose calls are collected in the third pass; {@code method} is null for initializers. */
+    private record PendingBody(TypeContext context, Node body, MethodInfo method) {
+    }
+
+    private final List<PendingBody> pending = new ArrayList<>();
+
     public ProjectModel build(List<ParsedFile> files, Path root) {
+        pending.clear();
         Set<String> projectTypes = new HashSet<>();
         for (ParsedFile file : files) {
             String pkg = packageOf(file.unit());
@@ -57,7 +72,26 @@ public final class ModelBuilder {
                 buildType(type, pkg, List.of(), Set.of(), resolver, source, model);
             }
         }
+        collectCalls(model);
         return model;
+    }
+
+    private void collectCalls(ProjectModel model) {
+        MemberLookup lookup = new MemberLookup(model);
+        for (PendingBody body : pending) {
+            ClassInfo info = body.context().info();
+            new CallCollector(body.context(), lookup).collect(body.body(), call -> {
+                if (body.method() != null) {
+                    body.method().addCall(call);
+                } else {
+                    info.addInitializerCall(call);
+                }
+                if (call.isResolved()) {
+                    info.addReferencedType(call.owner());
+                }
+            });
+        }
+        pending.clear();
     }
 
     private static void collectTypeNames(TypeDeclaration<?> type, String prefix, Set<String> out) {
@@ -89,6 +123,7 @@ public final class ModelBuilder {
         addSupertypes(type, context);
         addFields(type, context);
         addMethods(type, context);
+        addInitializers(type, context);
         addTypeReferences(type, context);
         model.add(info);
 
@@ -163,7 +198,7 @@ public final class ModelBuilder {
         }
     }
 
-    private static void addMethods(TypeDeclaration<?> type, TypeContext context) {
+    private void addMethods(TypeDeclaration<?> type, TypeContext context) {
         ClassInfo info = context.info();
         BodyAnalyzer analyzer = new BodyAnalyzer(context);
         for (BodyDeclaration<?> member : type.getMembers()) {
@@ -174,6 +209,7 @@ public final class ModelBuilder {
                 method.getBody().ifPresent(body -> {
                     m.setCyclomaticComplexity(ComplexityCounter.of(body));
                     analyzer.analyze(method, m);
+                    pending.add(new PendingBody(context, method, m));
                 });
                 info.addMethod(m);
             } else if (member instanceof ConstructorDeclaration constructor) {
@@ -181,6 +217,7 @@ public final class ModelBuilder {
                         parameterTypes(constructor.getParameters(), context), true, false, true);
                 m.setCyclomaticComplexity(ComplexityCounter.of(constructor.getBody()));
                 analyzer.analyze(constructor, m);
+                pending.add(new PendingBody(context, constructor, m));
                 info.addMethod(m);
             } else if (member instanceof CompactConstructorDeclaration compact
                     && type instanceof RecordDeclaration record) {
@@ -188,7 +225,26 @@ public final class ModelBuilder {
                         parameterTypes(record.getParameters(), context), true, false, true);
                 m.setCyclomaticComplexity(ComplexityCounter.of(compact.getBody()));
                 analyzer.analyze(compact, m);
+                pending.add(new PendingBody(context, compact, m));
                 info.addMethod(m);
+            }
+        }
+    }
+
+    /** Field initializers, initializer blocks and enum constants run code too. */
+    private void addInitializers(TypeDeclaration<?> type, TypeContext context) {
+        for (BodyDeclaration<?> member : type.getMembers()) {
+            if (member instanceof FieldDeclaration field) {
+                for (VariableDeclarator variable : field.getVariables()) {
+                    variable.getInitializer().ifPresent(init -> pending.add(new PendingBody(context, init, null)));
+                }
+            } else if (member instanceof InitializerDeclaration initializer) {
+                pending.add(new PendingBody(context, initializer.getBody(), null));
+            }
+        }
+        if (type instanceof EnumDeclaration enumeration) {
+            for (EnumConstantDeclaration constant : enumeration.getEntries()) {
+                pending.add(new PendingBody(context, constant, null));
             }
         }
     }
