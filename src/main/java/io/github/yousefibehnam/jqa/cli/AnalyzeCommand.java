@@ -77,9 +77,10 @@ final class AnalyzeCommand implements Callable<Integer> {
         }
         ResolutionStats stats = ResolutionStats.of(model, scan.files().size(), scan.problems().size());
         if (statsFile != null) {
-            try (Writer out = Files.newBufferedWriter(statsFile, StandardCharsets.UTF_8)) {
-                stats.toProperties().store(out, "jqa name-resolution statistics");
-            }
+            // Written by hand (sorted, no timestamp) so that re-running gives identical files.
+            StringBuilder text = new StringBuilder("# jqa name-resolution statistics\n");
+            new java.util.TreeMap<>(stats.toProperties()).forEach((k, v) -> text.append(k).append('=').append(v).append('\n'));
+            Files.writeString(statsFile, text, StandardCharsets.UTF_8);
         }
         System.err.printf(Locale.ROOT, "analysed %d files, %d types (%d files skipped); "
                         + "call sites resolved: %.1f%%, type references resolved: %.1f%%%n",
