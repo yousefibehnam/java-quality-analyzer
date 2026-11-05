@@ -63,6 +63,52 @@ public final class JdkTypes {
         }
     }
 
+    /** Declared type of a public field of a JDK type, e.g. {@code System.out -> java.io.PrintStream}. */
+    public static Optional<String> fieldType(String owner, String fieldName) {
+        return load(owner).flatMap(type -> {
+            try {
+                return Optional.of(type.getField(fieldName).getType()).filter(t -> !t.isPrimitive() && !t.isArray())
+                        .map(Class::getCanonicalName);
+            } catch (NoSuchFieldException | SecurityException | LinkageError e) {
+                return Optional.empty();
+            }
+        });
+    }
+
+    /**
+     * Return type of a public JDK method with this name and arity, when all such
+     * overloads agree on it (e.g. every {@code StringBuilder.append(x)} returns
+     * {@code StringBuilder}). Generic return types (type variables) give no answer.
+     */
+    public static Optional<String> returnType(String owner, String methodName, int argCount) {
+        return load(owner).flatMap(type -> {
+            try {
+                String answer = null;
+                for (java.lang.reflect.Method method : type.getMethods()) {
+                    if (!method.getName().equals(methodName) || method.getParameterCount() != argCount) {
+                        continue;
+                    }
+                    if (!(method.getGenericReturnType() instanceof Class<?>)
+                            && !(method.getGenericReturnType() instanceof java.lang.reflect.ParameterizedType)) {
+                        return Optional.empty();
+                    }
+                    Class<?> result = method.getReturnType();
+                    if (result.isPrimitive() || result.isArray()) {
+                        return Optional.empty();
+                    }
+                    String name = result.getCanonicalName();
+                    if (answer != null && !answer.equals(name)) {
+                        return Optional.empty();
+                    }
+                    answer = name;
+                }
+                return Optional.ofNullable(answer);
+            } catch (SecurityException | LinkageError e) {
+                return Optional.empty();
+            }
+        });
+    }
+
     /**
      * Depth of a JDK type in its inheritance tree.
      *
