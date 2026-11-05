@@ -5,6 +5,7 @@ import io.github.yousefibehnam.jqa.model.MethodInfo;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.OptionalDouble;
 import java.util.Set;
 
 /**
@@ -41,6 +42,33 @@ public final class Lcom {
             }
         }
         return Math.max(disjoint - sharing, 0);
+    }
+
+    /**
+     * The Henderson-Sellers (1996) normalised variant:
+     * LCOM* = (mean(mu(A)) - m) / (1 - m), where m is the number of methods, a the
+     * number of fields and mu(A) the number of methods using field A.
+     *
+     * <p>0 means every method uses every field; 1 means each field is used by exactly
+     * one method; values up to 2 occur when fields are used by no method at all.
+     *
+     * @return the value, or empty when undefined (fewer than two methods, or no fields)
+     */
+    public static OptionalDouble hendersonSellers(ClassInfo type) {
+        List<MethodInfo> methods = cohesionMethods(type);
+        int m = methods.size();
+        int a = type.fields().size();
+        if (m < 2 || a == 0) {
+            return OptionalDouble.empty();
+        }
+        Set<String> fieldNames = new HashSet<>();
+        type.fields().forEach(f -> fieldNames.add(f.name()));
+        long uses = 0;
+        for (MethodInfo method : methods) {
+            uses += method.accessedFields().stream().filter(fieldNames::contains).count();
+        }
+        double meanUsers = (double) uses / a;
+        return OptionalDouble.of((meanUsers - m) / (1 - m));
     }
 
     static List<MethodInfo> cohesionMethods(ClassInfo type) {
