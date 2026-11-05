@@ -8,7 +8,7 @@ import picocli.CommandLine.Command;
         mixinStandardHelpOptions = true,
         versionProvider = VersionProvider.class,
         description = "Java Quality Analyzer: Chidamber-Kemerer metrics for Java source code.",
-        subcommands = {AnalyzeCommand.class})
+        subcommands = {AnalyzeCommand.class, SummarizeCommand.class})
 public final class Main implements Runnable {
 
     @CommandLine.Spec
