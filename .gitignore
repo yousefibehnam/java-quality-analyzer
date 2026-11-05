@@ -1,0 +1,15 @@
+# Build output
+target/
+*.class
+
+# Case-study sources are cloned here by scripts/run_case_studies.sh
+data/
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+.DS_Store
