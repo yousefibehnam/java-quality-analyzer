@@ -1,22 +1,28 @@
 #!/usr/bin/env bash
-# Clones three open-source Java projects at pinned release tags, runs jqa on their
-# production sources and writes per-class CSV files plus a Markdown summary to results/.
+# Downloads the official source releases of three open-source Java projects from
+# Maven Central (versions current in 2017-2018), verifies their SHA-1 checksums, runs
+# jqa on them and writes per-class CSV files plus a Markdown summary to results/.
 #
 # Usage: scripts/run_case_studies.sh
-# Requires: git, a JDK (17+), Maven.
+# Requires: curl, unzip, shasum (or sha1sum), a JDK (17+), Maven.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DATA="$ROOT/data"
 RESULTS="$ROOT/results"
 JAR="$ROOT/target/jqa.jar"
+CENTRAL="https://repo1.maven.org/maven2"
 
-# name | repository | tag | license | source directory inside the repository
+# name | Maven path (group/artifact/version) | release date | license
 PROJECTS=(
-  "commons-lang|https://github.com/apache/commons-lang.git|rel/commons-lang-3.21.0|Apache-2.0|src/main/java"
-  "commons-io|https://github.com/apache/commons-io.git|rel/commons-io-2.22.0|Apache-2.0|src/main/java"
-  "junit4|https://github.com/junit-team/junit4.git|r4.13.2|EPL-1.0|src/main/java"
+  "commons-lang|org/apache/commons/commons-lang3/3.7|2017-11-04|Apache-2.0"
+  "commons-io|commons-io/commons-io/2.6|2017-10-15|Apache-2.0"
+  "junit4|junit/junit/4.12|2014-12-04|EPL-1.0"
 )
+
+sha1() {
+  if command -v sha1sum >/dev/null 2>&1; then sha1sum "$1" | cut -d' ' -f1; else shasum -a 1 "$1" | cut -d' ' -f1; fi
+}
 
 echo "==> building jqa"
 (cd "$ROOT" && mvn -B -q -DskipTests package)
@@ -25,22 +31,34 @@ mkdir -p "$DATA" "$RESULTS"
 summary_args=()
 notes=()
 for entry in "${PROJECTS[@]}"; do
-  IFS='|' read -r name url tag license srcdir <<<"$entry"
-  checkout="$DATA/$name"
-  if [[ ! -d "$checkout/.git" ]]; then
-    echo "==> cloning $name at $tag"
-    git clone --quiet --depth 1 --branch "$tag" "$url" "$checkout"
+  IFS='|' read -r name gav released license <<<"$entry"
+  version="${gav##*/}"
+  artifact="$(basename "$(dirname "$gav")")"
+  file="$artifact-$version-sources.jar"
+  url="$CENTRAL/$gav/$file"
+  jar="$DATA/$file"
+
+  if [[ ! -f "$jar" ]]; then
+    echo "==> downloading $file"
+    curl -fsSL -o "$jar" "$url"
   fi
-  actual="$(git -C "$checkout" describe --tags --exact-match 2>/dev/null || echo unknown)"
-  if [[ "$actual" != "$tag" ]]; then
-    echo "error: $checkout is at '$actual', expected '$tag' (delete it and re-run)" >&2
+  expected="$(curl -fsSL "$url.sha1" | cut -c1-40)"
+  actual="$(sha1 "$jar")"
+  if [[ "$expected" != "$actual" ]]; then
+    echo "error: SHA-1 mismatch for $file (expected $expected, got $actual)" >&2
     exit 1
   fi
-  echo "==> analysing $name ($tag, $license)"
-  java -jar "$JAR" analyze "$checkout/$srcdir" --format csv --output "$RESULTS/$name.csv" \
+
+  src="$DATA/$name-$version"
+  rm -rf "$src"
+  mkdir -p "$src"
+  unzip -q "$jar" -d "$src"
+
+  echo "==> analysing $name $version ($license, released $released)"
+  java -jar "$JAR" analyze "$src" --format csv --output "$RESULTS/$name.csv" \
     --stats "$RESULTS/$name.stats.properties"
   summary_args+=("$name=$RESULTS/$name.csv")
-  notes+=(--note "$name: \`$tag\` of $url ($license), directory \`$srcdir\`")
+  notes+=(--note "$name $version: \`$file\` from Maven Central, released $released ($license), SHA-1 \`$actual\`")
 done
 
 echo "==> summarising"
